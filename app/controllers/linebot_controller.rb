@@ -1,6 +1,6 @@
 class LinebotController < ApplicationController
   require "line/bot"
-  require "wikipedia"
+  require "open-uri"
 
   protect_from_forgery :except => [:callback]
 
@@ -16,29 +16,19 @@ class LinebotController < ApplicationController
 
     signature = request.env["HTTP_X_LINE_SIGNATURE"]
     unless client.validate_signature(body, signature)
-      error 400 do "Bad Request" end
+      head :bad_request
     end
 
     events = client.parse_events_from(body)
 
     events.each { |event|
-      if event.message["text"] != nil
-        word = event.message["text"]
-        Wikipedia.Configure {
-          domain "ja.wikipedia.org"
-          path "w/api.php"
-        }
-      end
-
-      page = Wikipedia.find(word)
-      response = page.summary + "\n" + page.fullurl + page.images
       case event
       when Line::Bot::Event::Message
         case event.type
         when Line::Bot::Event::MessageType::Text
           message = {
             type: "text",
-            text: event.message["text"]
+            text: return.message
           }
           client.reply_message(event["replyToken"], message)
         end
@@ -47,4 +37,13 @@ class LinebotController < ApplicationController
 
     head :ok
   end
+  def return_message
+    open("http://www.meigensyu.com/quotations/view/random") do |file|
+      page = file.read
+      page.scan(/<div class=\"text\">(.*?)<\/div>/).each do |meigen|
+        return meigen[0].encode("sjis")
+      end
+    end
+  end
 end
+
